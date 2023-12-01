@@ -4,9 +4,9 @@ import time
 import json
 import pandas as pd
 
-purchaseTypes = {
-    "Заĸупĸа из одного источниĸа": "ЗОИ",
-    "Элеĸтронный ауĸцион":"ЭА",
+tenderNameShorts = {
+    "Закупка из одного источника": "ЗОИ",
+    "Электронный аукцион":"ЭА",
     "Запрос ценовых предложений":"ЗЦП"
 }
 
@@ -48,8 +48,9 @@ def create_request_body(dtFrom, dtTo, searchStr='', page=0, pageSize=10):
         data["contextTextSearch"] = searchStr
     return data
 
-def parse():
-    json_data = create_request_body(datetime.datetime(2021, 7, 26, 21, 20),datetime.datetime.now())
+def parse(dtFrom, dtTo, searchStr):
+    # json_data = create_request_body(datetime.datetime(2021, 7, 26, 21, 20),datetime.datetime.now())
+    json_data = create_request_body(dtFrom, dtTo, searchStr)
     response = requests.post('https://gias.by/search/api/v1/search/purchases', headers=headers, json=json_data, verify=False)
 
     if response.status_code != 200:
@@ -62,21 +63,28 @@ def parse():
     with open('response.json', 'w') as file:
         file.write(json.dumps(responseData, indent=4, ensure_ascii=False))
 
-    # df = pd.DataFrame({
-    #     'Предмет закупки':[],
-    #     'Наименование заказчика/организатора закупки':[],
-    #     'Место нахождение':[],
-    #     'Номер':[],
-    #     'Ориент. стоимость':[],
-    #     'Предложения до':[],
-    #     'Время подачи':[],
-    #     'Тип закупки':[],
-    #     'Дата размещения':[],
-    #     'Номенклатура ED':[],
-    #     'Категории':[],
-    #     'Участие в закупке':[],
-    #     'Ответсвенный':[]
-    # })
+    columns = parseJson(responseData["content"])
+    df = pd.DataFrame({
+        'Предмет закупки':columns[0],
+        'Наименование заказчика/организатора закупки':columns[1],
+        'Место нахождение':columns[2],
+        'Номер':columns[3],
+        'Ориент. стоимость':columns[4],
+        'Предложения до':columns[5],
+        'Время подачи':columns[6],
+        'Тип закупки':columns[7],
+        'Дата размещения':columns[8],
+        'Номенклатура ED':columns[9],
+        'Категории':columns[10],
+        'Участие в закупке':columns[11],
+        'Ответсвенный':columns[12]
+    })
+    df.to_excel(f'./tenders_{datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")}.xlsx', sheet_name='Закупки', index=False)
+
+def getTenderForm(url):
+    response = requests.get(url, headers=headers, verify=False)
+    data = response.json()
+    return tenderNameShorts[data["tenderFormName"]]
 
 def parseJson(data):
     result = [
@@ -95,7 +103,8 @@ def parseJson(data):
         []
     ]
     for item in data:
-        result[0].append(f"{baseLink}{item['purchaseGiasId']}")
+        url = f"{baseLink}{item['purchaseGiasId']}"
+        result[0].append(url)
         result[1].append(item["organizator"]["name"])
         result[2].append(item["organizator"]["location"])
         result[3].append(item["publicPurchaseNumber"])
@@ -106,7 +115,8 @@ def parseJson(data):
         else:
             result[5].append("-")
         result[6].append("-")
-        result[7].append("-") # purchaseType
+        tenderForm = getTenderForm(f"https://gias.by/purchase/api/v1/purchase/{item['purchaseGiasId']}")
+        result[7].append(tenderForm) # purchaseType
         result[8].append(datetime.datetime.fromtimestamp(item["dtCreate"]/1000).strftime("%d.%m.%Y"))
         result[9].append("-")
         result[10].append("-")
@@ -116,27 +126,32 @@ def parseJson(data):
     return result
 
 def main():
-    # parse()
-    with open('./response_.json') as file:
-        jsonData = json.load(file)
-        columns = parseJson(jsonData["content"])
+    searchStr = input("Input search string or press Enter> ")
+    dtFrom = input("Input date 'From' (1.12.2023)> ")
+    dtTo = input("Input date 'To' (1.12.2023)> ")
+    
+    parse(datetime.datetime.strptime(dtFrom, "%d.%m.%Y") ,datetime.datetime.strptime(dtTo, "%d.%m.%Y"), searchStr)
 
-        df = pd.DataFrame({
-            'Предмет закупки':columns[0],
-            'Наименование заказчика/организатора закупки':columns[1],
-            'Место нахождение':columns[2],
-            'Номер':columns[3],
-            'Ориент. стоимость':columns[4],
-            'Предложения до':columns[5],
-            'Время подачи':columns[6],
-            'Тип закупки':columns[7],
-            'Дата размещения':columns[8],
-            'Номенклатура ED':columns[9],
-            'Категории':columns[10],
-            'Участие в закупке':columns[11],
-            'Ответсвенный':columns[12]
-        })
-        df.to_excel('./teams.xlsx', sheet_name='Budgets', index=False)
+    # with open('./response_.json') as file:
+    #     jsonData = json.load(file)
+    #     columns = parseJson(jsonData["content"])
+
+    #     df = pd.DataFrame({
+    #         'Предмет закупки':columns[0],
+    #         'Наименование заказчика/организатора закупки':columns[1],
+    #         'Место нахождение':columns[2],
+    #         'Номер':columns[3],
+    #         'Ориент. стоимость':columns[4],
+    #         'Предложения до':columns[5],
+    #         'Время подачи':columns[6],
+    #         'Тип закупки':columns[7],
+    #         'Дата размещения':columns[8],
+    #         'Номенклатура ED':columns[9],
+    #         'Категории':columns[10],
+    #         'Участие в закупке':columns[11],
+    #         'Ответсвенный':columns[12]
+    #     })
+    #     df.to_excel('./tenders.xlsx', sheet_name='Закупки', index=False)
 
 if __name__ == "__main__":
     main()
